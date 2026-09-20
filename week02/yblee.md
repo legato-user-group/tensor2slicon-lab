@@ -1,5 +1,3 @@
-# 2주차 학습 노트: 모델에서 실리콘까지
-
 ## PyTorch, JAX·OpenXLA, Modular MAX·Mojo로 이해하는 AI 실행 스택
 
 > **핵심 질문**  
@@ -280,10 +278,20 @@ Python 프로그램에는 텐서 연산뿐 아니라 반복문, 조건문, 객�
 컴파일러가 가속기 계산을 최적화하려면 다음 정보를 구분해야 한다.
 
 - 가속기에서 실행할 계산은 무엇인가?
+  - 어떤 가속기냐에 따라서 연산 속도가 매우 달라진다
+
 - 어떤 연산의 출력이 다음 연산의 입력인가?
+  - 연산이 대기하거나 연산이 병렬로 이루어진 경우에 따라 달라짐
+
 - shape와 dtype은 무엇인가?
+  - 개수, 모양에 따라서 메모리가 달라짐
+
 - 제어 흐름은 정적인가, 입력 데이터에 따라 달라지는가?
+  - 적이면 고정되지만 동적이면 값 확인후 진행해야 함
+
 - 외부 부작용이나 순서를 지켜야 하는 연산이 있는가?
+  - 부작용이 걸려있으면 결과를 보고 움직여야 함
+
 
 그래프와 IR은 이 정보를 분석 가능한 형태로 정리하는 수단이다.
 
@@ -318,28 +326,28 @@ return %y
 
 여기서 `%a`, `%z` 같은 이름은 중간값을 나타낸다. 이름을 붙였다는 이유만으로 각각 별도의 HBM 버퍼가 반드시 존재하는 것은 아니다.
 
-### 4.4 tracing, graph capture, lowering
+### 4.4 원래 작성한 코드에서 이런 IR을 어떻게 만들고, 가속기가 실행할 수 있는 형태로 바꿀까?
 
 | 용어 | 의미 | 주의점 |
 |---|---|---|
-| Tracing | 입력의 특성 등을 사용해 프로그램의 계산을 추적 | 모든 Python 동작을 무조건 지원하지는 않음 |
-| Graph capture | 연산과 의존 관계를 그래프로 포착 | 프레임워크마다 포착 방법이 다름 |
-| Lowering | 더 구체적이거나 다른 목적의 표현으로 변환 | 한 번이 아니라 여러 단계에서 일어남 |
-| Specialization | shape·dtype·정적 값 등에 맞춘 프로그램 생성 | 조건이 달라지면 재컴파일할 수 있음 |
-| Graph break | 컴파일 구간이 끊어지는 지점 | 정확성 문제와 동일하지 않지만 최적화 범위를 줄일 수 있음 |
+| Tracing | 입력의 특성 등을 사용해 프로그램의 계산을 추적 (원래 코드에서 어떤 계산하는지 파악) | 모든 Python 동작을 무조건 지원하지는 않음 |
+| Graph capture | 연산과 의존 관계를 그래프로 포착(계산과 연결 관계를 기록) | 프레임워크마다 포착 방법이 다름 |
+| Lowering | 더 구체적이거나 다른 목적의 표현으로 변환 (다음 처리단계에서 맞는 표현으로 바꾸기) | 한 번이 아니라 여러 단계에서 일어남 |
+| Specialization | shape·dtype·정적 값 등에 맞춘 프로그램 생성 (특정 입력 조건에 맞추기) | 조건이 달라지면 재컴파일할 수 있음 |
+| Graph break | 컴파일 구간이 끊어지는 지점 (계산을 하나의 그래프로 포착하다가 구간이 끊기기) | 정확성 문제와 동일하지 않지만 최적화 범위를 줄일 수 있음 |
 
 ### 4.5 서로 다른 이름의 위치
 
 ```mermaid
 flowchart TB
-    PY["Python에서 작성한 계산"] --> PT["PyTorch capture"]
+    PY["Python에서 작성한 계산"] --> PT["PyTorch capture(TorchDynamo)"]
     PY --> JAX["JAX tracing"]
     PY --> MAX["MAX graph construction"]
     PT --> FX["FX와 ATen 기반 그래프"]
     JAX --> JP["Jaxpr"]
     JP --> SH["StableHLO"]
     MAX --> MG["MAX Graph와 내부 표현"]
-    FX --> PB["선택한 PyTorch backend"]
+    FX --> PB["선택한 PyTorch backend(TorchInductor)"]
     SH --> XB["XLA 등의 소비자"]
     MG --> MB["MAX 컴파일 경로"]
 ```
@@ -355,7 +363,7 @@ MLIR은 단일 모델 파일 형식이나 완성된 AI 실행 프레임워크가
 - XLA의 내부 HLO는 StableHLO와 관련이 있지만, 그 자체는 MLIR 기반 표현이 아니다.
 - Mojo가 MLIR을 기반으로 한다고 해서 모든 Mojo 프로그램이 StableHLO나 XLA를 반드시 거치는 것은 아니다.
 
-OpenXLA 공식 용어 문서는 StableHLO와 내부 HLO를 명확하게 구분한다.<citation refs="7TgxYoaClKzN_LljK4Tn2">StableHLO ... is a standardized MLIR dialect ... HLO ... is not based on MLIR</citation>
+OpenXLA 공식 용어 문서는 StableHLO와 내부 HLO를 명확하게 구분한다.
 
 ### 4.7 이 단계의 핵심 용어 3개
 
@@ -387,7 +395,7 @@ OpenXLA 공식 용어 문서는 StableHLO와 내부 HLO를 명확하게 구분�
 | 버퍼 계획 | 어떤 메모리를 언제 재사용할까? | 중간값의 생존 기간 분석 |
 | Target lowering | 이 장치의 어떤 기능을 쓸까? | CPU 벡터 연산, GPU 행렬 명령, TPU MXU 경로 |
 
-XLA 공식 아키텍처는 하드웨어 독립 최적화, 대상별 최적화, 라이브러리 호출 선택, 대상별 코드 생성의 단계를 설명한다.<citation refs="TACJZQ6rcD1Rb79wgcGUw">XLA sends the HLO computation to a backend for further HLO-level optimizations ... backends may also pattern-match certain operations or combinations thereof to optimized library calls.</citation>
+XLA 공식 아키텍처는 하드웨어 독립 최적화, 대상별 최적화, 라이브러리 호출 선택, 대상별 코드 생성의 단계를 설명한다.
 
 ### 5.2 Fusion이 바꾸는 것
 
@@ -417,7 +425,10 @@ flowchart LR
 
 - fusion은 무조건 적용되는 규칙이 아니라 컴파일러·커널 구현의 선택이다.
 - 너무 큰 fusion은 레지스터 사용량이나 코드 복잡도를 높여 불리할 수도 있다.
-- 그래프 수준 fusion과 GPU의 FMA 명령은 같은 뜻이 아니다.
+- 그래프 수준 fusion과 GPU의 FMA(Fused Multiply-Add) 명령은 같은 뜻이 아니다.
+  - 그래프수준의 Fusion : bias, add, ReLU와 같은 여러 텐서 연산
+  - GPU의 FMA 명령 : a * b + c의 곱셈과 덧셈
+
 - “중간값이 없다”는 말은 수학적 값이 사라진다는 뜻이 아니라, 큰 중간 버퍼를 별도로 저장하지 않을 수 있다는 뜻이다.
 
 ### 5.3 Tiling은 이번 주에 어디까지 이해하면 될까?
@@ -428,7 +439,7 @@ flowchart LR
 
 ### 5.4 코드 생성과 라이브러리 호출의 공존
 
-최종 실행 프로그램은 모두 직접 생성한 커널일 수도 있지만, 그렇지 않을 수도 있다.
+최종 실행 프로그램은 모두 직접 생성한 커널일 수도 있지만, 그렇지 않을 수도 있다. 
 
 ```mermaid
 flowchart TB
@@ -440,7 +451,7 @@ flowchart TB
     EX --> RT["런타임에서 실행"]
 ```
 
-예를 들어 matmul은 라이브러리에 맡기고, 작은 원소별 후처리는 생성한 커널로 처리하는 조합이 가능하다. 정확한 경로는 shape, dtype, backend, 라이브러리 버전, 설정 등에 따라 달라진다.
+예를 들어 matmul은 JAX나 PyTorch와 같은 딥러닝 라이브러리에 맡기고, 작은 원소별 후처리(bias, add, ReLU)는 생성한 커널로 처리하는 조합이 가능하다. 정확한 경로는 shape, dtype, backend, 라이브러리 버전, 설정 등에 따라 달라진다.
 
 ### 5.5 이 단계의 핵심 용어 3개
 
@@ -461,11 +472,20 @@ flowchart TB
 런타임은 준비된 실행 프로그램을 실제 데이터와 장치에 연결한다.
 
 - 실행에 필요한 버퍼를 준비한다.
+  - 버퍼 : 초기-중간-최종 결과를 담을 데이터 저장공간 (재사용도 가능)
+
 - 필요한 경우 host와 device 사이에서 데이터를 전송한다.
+  - CPU(host)에 있는 데이터를 xPU(device)로 옮기기
 - 실행 순서와 의존 관계를 관리한다.
 - 장치에 커널 또는 실행 프로그램을 제출한다.
+  - 행렬곱 + 후처리 작업을 xPU에 요청, 사용할 입출력 메모리 위치 정보도 전달
+
 - 완료 이벤트와 동기화를 처리한다.
+  - 작업이 끝났는지 확인할 수 있는 정보 관리
+
 - 결과를 다음 연산이나 사용자 코드에 전달한다.
+  - xPU에서 xPU연산을 하거나 CPU로 다시 전달
+
 
 컴파일러가 모든 버퍼의 실제 주소를 영구히 결정하고 런타임이 아무 일도 하지 않는 것도 아니며, 런타임이 실행할 때마다 계산 최적화를 처음부터 수행하는 것도 아니다. 두 계층의 책임은 구현에 따라 협력적으로 나뉜다.
 
@@ -496,7 +516,7 @@ sequenceDiagram
     R-->>P: 값 사용 가능
 ```
 
-JAX 공식 문서는 `jax.Array`가 아직 완료되지 않은 계산의 결과를 나타낼 수 있다고 설명한다. shape나 dtype을 확인하는 것과 실제 값을 CPU에서 읽는 것은 다르다.<citation refs="DHmjEvk28BD3qAHH1aX3w">JAX returns a jax.Array value, which is a future ... We can inspect the shape or type ... without waiting for the computation ... to complete.</citation>
+JAX 공식 문서는 `jax.Array`가 아직 완료되지 않은 계산의 결과를 나타낼 수 있다고 설명한다. shape나 dtype을 확인하는 것과 실제 값을 CPU에서 읽는 것은 다르다.
 
 ### 6.4 비동기가 유용한 이유
 
@@ -548,7 +568,7 @@ elapsed = time.perf_counter() - start
 
 ---
 
-## 7. 커널에서 칩 내부로: GPU와 TPU
+## 7. 커널에서 칩 내부로: GPU와 TPU ​​
 
 ### 7.1 커널은 수학 연산 그 자체가 아니다
 
@@ -565,14 +585,14 @@ GPU 커널은 여러 스레드나 프로그램 인스턴스가 협력해 수행�
 
 NVIDIA GPU를 예로 들면, 여러 SM이 있으며 각 SM에는 스케줄링과 일반 산술 연산, 행렬 연산, 가까운 저장 공간을 위한 자원이 있다.
 
-| 구성 요소 | 큰 역할 | 공통 예제와의 연결 |
+| 구성 요소 | 역할 | 공통 예제와의 연결 |
 |---|---|---|
-| SM | 스레드 블록을 실행하는 주요 계산 단위 | 커널 작업을 분담 |
+| SM(Streaming Multiprocessor) | 스레드 블록을 실행하는 주요 계산 단위 | 커널 작업을 분담 |
 | Tensor Core | 특정 형식의 행렬 연산 가속 | 조건이 맞는 `X @ W` |
 | 일반 산술 연산 장치 | 원소별 산술·비교 등 | bias add, ReLU |
-| Register | 연산에 가까운 저장 공간 | 부분 결과, 인덱스, 누산값 등 |
-| Shared memory | 블록이 협력해 사용할 수 있는 빠른 저장 공간 | 입력 조각의 재사용 등 |
-| L1·L2 cache | 메모리 접근을 완충 | 자주 사용하는 데이터 |
+| Register | 계산중인 값을 보관하는 저장 공간 | 부분 결과, 인덱스, 누산값 등 |
+| Shared memory | 같은 스레드 블록안에서 공유해서 사용할 수 있는 빠른 저장 공간 | 입력 조각의 재사용 등 |
+| L1·L2 cache | L1 : 각 SM 가까이 있으며 해당 SM의 접근을 돕는 공간<br />L2 : 여러 SM이 공유하며 장치 메모리 접근을 줄이는 공간<br /> | 자주 사용하는 데이터 |
 | HBM 또는 장치 메모리 | 큰 텐서 저장 | 입력, 가중치, 출력 |
 
 모든 matmul이 무조건 Tensor Core를 사용하지는 않는다. GPU 세대, dtype, shape, 라이브러리·컴파일러 선택 등에 따라 달라진다. 또한 모든 GPU가 HBM을 사용하는 것은 아니다.
@@ -589,8 +609,6 @@ flowchart TB
 ```
 
 이 그림은 주요 구성 요소의 관계를 단순화한 것이다. 모든 데이터가 반드시 동일한 순서로 모든 저장 공간을 통과한다는 뜻은 아니다. GPU 세대별 전용 데이터 경로와 추가 메모리도 있을 수 있다.
-
-Scaling Book 12장은 NVIDIA GPU의 SM·Tensor Core와 메모리 계층을 설명한다.<citation refs="_jqAtpc11pBwOfZ9BpCW9">CUDA cores are responsible for ReLUs, pointwise vector operations, and reductions ... Beyond the compute units, GPUs have a hierarchy of memories</citation>
 
 ### 7.3 TPU의 큰 그림
 
@@ -613,7 +631,7 @@ flowchart LR
     CTRL --> VMEM
 ```
 
-Scaling Book 2장은 MXU, VPU, VMEM의 역할을 구분하며 VPU에서 ReLU와 원소별 덧셈 등을 수행한다고 설명한다.<citation refs="ajv5k8_bXQH0GD5In9_sU">The VPU ... performs general mathematical operations like ReLU activations or pointwise addition ... VMEM ... is an on-chip scratchpad</citation>
+Scaling Book 2장은 MXU, VPU, VMEM의 역할을 구분하며 VPU에서 ReLU와 원소별 덧셈 등을 수행한다고 설명한다.
 
 ### 7.4 이름이 비슷해도 단위는 다를 수 있다
 
@@ -623,18 +641,6 @@ GPU의 **Tensor Core**와 TPU 문서의 **TensorCore**는 같은 크기의 구�
 - TPU TensorCore는 MXU·VPU·VMEM 등을 포함하는 더 큰 계산 단위의 이름으로 쓰인다.
 
 이름보다 **어떤 기능을 포함하는 단위인지** 확인해야 한다.
-
-### 7.5 “실리콘까지”의 의미
-
-이 문서의 도착점은 다음 질문에 답하는 것이다.
-
-1. 어떤 장치가 곱셈·덧셈·비교를 수행하는가?
-2. 입력과 가중치는 어디에 있는가?
-3. 중간값은 어디에 머무르는가?
-4. 어떤 데이터 이동을 줄일 수 있는가?
-5. 실행 순서와 병렬성은 누가 결정하는가?
-
-트랜지스터 설계나 반도체 공정까지 알아야 이 흐름을 이해할 수 있는 것은 아니다.
 
 ---
 
@@ -655,7 +661,7 @@ flowchart TB
 
 실제 내부에는 decomposition, 함수화, 다양한 IR과 최적화가 더 있다. 위 그림은 역할을 구분하기 위한 단순화다.
 
-PyTorch 공식 문서에서 `torch.compile`의 기본 backend는 Inductor이며, 주요 GPU 경로에서 Triton을 핵심 구성 요소로 사용한다고 설명한다.<citation refs="9IjZE8l494TPQg3dE0eUD">TorchInductor is the default torch.compile deep learning compiler ... For NVIDIA, AMD and Intel GPUs, it leverages OpenAI Triton as the key building block.</citation>
+PyTorch 공식 문서에서 `torch.compile`의 기본 backend는 Inductor이며, 주요 GPU 경로에서 Triton을 핵심 구성 요소로 사용한다고 설명한다.
 
 > **중요:** `torch.compile`을 사용했다고 자동으로 OpenXLA를 사용하는 것은 아니다. PyTorch/XLA는 별도의 통합 경로이며, backend 선택을 구분해야 한다.
 
@@ -786,7 +792,7 @@ with torch.no_grad():
 
 **PJRT를 단순히 “XLA 다음에 붙는 커널 실행기”로만 이해하면 좁다.** 장치 열거, 버퍼 관리, 컴파일 요청, executable 실행 같은 역할을 연결한다. 실제 JAX 구현에는 추가 런타임 추상화가 들어갈 수 있으며, 아래 도식은 그 세부 계층을 생략했다.
 
-공식 PJRT 문서는 client, device, buffer, compiler, loaded executable을 구분한다.<citation refs="bfjKZvU0vX3AFgy2Ssqav">Clients manage all communication between the device and framework ... PjRtClient::Compile ... take an input module and return a PjRtLoadedExecutable.</citation>
+공식 PJRT 문서는 client, device, buffer, compiler, loaded executable을 구분한다.
 
 ### 9.2 컴파일 경로와 실행 경로를 나눠 보기
 
@@ -941,7 +947,7 @@ print("호출별 완료 대기를 포함한 평균(ms):", ms)
 
 ### 9.7 TPU에서는 그 다음에 무엇이 일어날까?
 
-Scaling Book 9장의 TPU 설명에서는 HLO 이후 더 낮은 수준의 LLO를 거쳐, 메모리 간 복사와 systolic array 사용 등을 표현하고, 최종적으로 TPU가 실행할 코드로 내려간다고 설명한다.<citation refs="w75pC5G9dvZZu9oyLy2ro">The XLA compiler first lowers it to LLO ... scheduling copies between memories, pushing arrays onto the systolic array ... compiled to machine code</citation>
+Scaling Book 9장의 TPU 설명에서는 HLO 이후 더 낮은 수준의 LLO를 거쳐, 메모리 간 복사와 systolic array 사용 등을 표현하고, 최종적으로 TPU가 실행할 코드로 내려간다고 설명한다.
 
 ```mermaid
 flowchart LR
@@ -1109,7 +1115,7 @@ struct StudyRelu:
 - 비교 결과의 `select`는 각 위치에서 양수 값을 유지하거나 0을 선택한다.
 - 출력 shape를 Python에서 명시하므로 이 예제에는 별도 shape function을 넣지 않는다.
 
-`foreach` 기반 장치 추상화와 직접 장치별 커널을 작성하는 방식은 모두 공식 custom op 문서에서 다룬다.<citation refs="6AZiWCzFap46teuHcicf-">The custom op API supports both approaches: foreach() for elementwise operations ... and device-specific kernels when you need direct control over thread layout and memory access patterns.</citation>
+`foreach` 기반 장치 추상화와 직접 장치별 커널을 작성하는 방식은 모두 공식 custom op 문서에서 다룬다.
 
 #### Python: 기본 연산과 custom op 연결
 
@@ -1340,7 +1346,7 @@ mojo 05_mojo_bias_relu.mojo
 
 ### 10.6 Mojo와 MLIR의 관계
 
-Mojo는 MLIR 기반 컴파일러 인프라를 활용한다.<citation refs="XWottOcX6Ix-VFrkjvQJC">It's the first programming language built from the ground-up using MLIR</citation> 이것이 주는 핵심 관점은 **높은 수준의 언어 구조부터 낮은 수준의 장치 실행까지 여러 단계의 표현과 변환을 사용할 수 있다**는 것이다.
+Mojo는 MLIR 기반 컴파일러 인프라를 활용한다. 이것이 주는 핵심 관점은 **높은 수준의 언어 구조부터 낮은 수준의 장치 실행까지 여러 단계의 표현과 변환을 사용할 수 있다**는 것이다.
 
 다음 도식은 개념도이며 정확한 내부 pass 목록을 뜻하지 않는다.
 
@@ -1678,114 +1684,9 @@ layout·contiguous 여부:
 
 ---
 
-## 15. 스터디 발표와 토론 가이드
+## 15. 용어 사전과 최종 요약
 
-### 15.1 각자 선택할 수 있는 다섯 구간
-
-| 구간 | 발표의 중심 질문 | 권장 결과물 |
-|---|---|---|
-| 모델 → 연산 | Transformer를 펼치면 무엇이 남는가? | 주요 연산과 shape 표 |
-| 연산 → 그래프·IR | Python 계산을 어떤 표현으로 기록하는가? | 소스와 그래프 연결 그림 |
-| IR → 실행 코드 | compiler가 무엇을 결정하는가? | fusion·layout·backend 설명 |
-| 실행 요청 → 커널 | 누가 데이터를 준비하고 완료를 기다리는가? | sequence diagram |
-| 커널 → 칩 내부 | 어디서 계산하고 어디서 데이터를 가져오는가? | 연산 장치와 메모리 그림 |
-
-### 15.2 발표용 Markdown 템플릿
-
-아래 블록은 자신의 자료에 복사해서 채우는 템플릿이다.
-
-````markdown
-# 내가 선택한 구간
-
-## 1. 이 단계의 역할
-- 한 문장 설명:
-- 앞 단계에서 받는 것:
-- 다음 단계에 넘기는 것:
-
-## 2. 공통 예제
-`Y = ReLU(X @ W + b)`
-
-- X의 shape:
-- W의 shape:
-- b의 shape:
-- 이 단계에서 달라지는 표현 또는 실행 방식:
-
-## 3. 핵심 용어 3개
-1. 용어:
-2. 용어:
-3. 용어:
-
-## 4. 연결 그림
-```mermaid
-flowchart LR
-    A["앞 단계"] --> B["내가 설명하는 단계"]
-    B --> C["다음 단계"]
-```
-
-## 5. 코드 또는 관찰
-- 실제 실행했는가:
-- 실행 환경:
-- 소스 코드·IR·프로파일 중 무엇을 보았는가:
-- 확인한 사실:
-- 아직 확인하지 못한 것:
-
-## 6. 토론 질문
-- 질문 1:
-- 질문 2:
-
-## 7. 참고 자료
-- 공식 문서 링크:
-````
-
-### 15.3 토론 질문 모음
-
-#### 모델·연산 관점
-
-1. `XW + b`에서 `b`가 broadcast된다는 것은 실제 복사와 어떻게 다른가?
-2. Transformer의 높은 수준 블록 이름을 없애면 어떤 연산이 남는가?
-3. attention의 논리적 중간 행렬을 실제 메모리에 모두 만들어야 할까?
-
-#### 그래프·IR 관점
-
-4. 같은 Python 코드라도 입력 shape가 달라지면 다른 프로그램이 필요한 이유는 무엇인가?
-5. Jaxpr, StableHLO, HLO, LLVM IR은 왜 하나로 통일하지 않을까?
-6. 데이터에 의존하는 Python 조건문을 그래프로 옮길 때 어떤 문제가 생길까?
-
-#### 컴파일러 관점
-
-7. fusion은 왜 중간 메모리 접근을 줄일 수 있을까?
-8. fusion을 많이 하면 항상 좋아질까?
-9. compiler가 생성한 커널과 이미 최적화된 라이브러리 중 무엇을 선택해야 할까?
-10. 어떤 최적화가 수치 정확도에 영향을 줄 수 있을까?
-
-#### 런타임 관점
-
-11. 결과의 shape는 알지만 실제 값은 아직 준비되지 않았다는 것이 어떻게 가능한가?
-12. 두 개의 비동기 요청은 반드시 동시에 실행될까?
-13. host에서 값을 출력하는 행위가 왜 전체 실행 흐름에 영향을 줄까?
-
-#### 하드웨어·도구 관점
-
-14. 같은 행렬곱이라도 GPU와 TPU에서 데이터 이동 방식이 왜 다를까?
-15. Mojo custom op를 MAX에 연결할 때 compiler가 알아야 하는 정보는 무엇인가?
-16. Triton program 하나와 GPU thread 하나는 어떻게 다른가?
-17. OpenXLA와 MAX+Mojo를 비교할 때 어떤 층위를 맞춰야 공정할까?
-
-### 15.4 5분 발표 구성 예시
-
-1. **30초:** 내가 맡은 구간과 큰 그림의 위치.
-2. **1분:** 입력·출력과 핵심 용어 3개.
-3. **1분 30초:** 공통 수식을 해당 구간으로 설명.
-4. **1분:** 그림 또는 코드에서 중요한 부분 2개.
-5. **1분:** 확인한 사실과 아직 남은 질문.
-
-발표의 목적은 코드 양이나 용어 수를 늘리는 것이 아니라, 다른 사람이 자신의 구간과 연결할 수 있게 만드는 것이다.
-
----
-
-## 16. 용어 사전과 최종 요약
-
-### 16.1 용어 사전
+### 15.1 용어 사전
 
 | 용어 | 이번 주에 필요한 뜻 |
 |---|---|
@@ -1827,7 +1728,7 @@ flowchart LR
 | Mojo | CPU·GPU 코드 작성에 사용할 수 있는 프로그래밍 언어 |
 | MAX | Modular의 모델 graph·compile·runtime·추론 관련 기술 스택 |
 
-### 16.2 전체를 다시 한 장에 놓기
+### 15.2 전체를 다시 한 장에 놓기
 
 ```mermaid
 flowchart TB
@@ -1850,7 +1751,7 @@ flowchart TB
 
 이 그림의 아래쪽 장치 목록은 전체 스택을 합쳐 표현한 것이다. **각 스택이 모든 종류의 장치를 같은 수준으로 지원한다는 뜻은 아니다.**
 
-### 16.3 마지막으로 기억할 여섯 문장
+### 15.3 마지막으로 기억할 여섯 문장
 
 1. **모델은 무엇을 계산할지 표현한다.**
 2. **그래프와 IR은 그 계산을 분석하고 변환할 수 있게 만든다.**
@@ -1860,72 +1761,4 @@ flowchart TB
 6. **OpenXLA와 MAX+Mojo는 이 연결을 구성하는 서로 다른 기술 스택이며, Mojo 자체는 그중 코드를 작성하는 언어다.**
 
 > 이번 주의 목표는 모든 내부 구현을 외우는 것이 아니다. 앞으로 만날 fusion, tiling, memory bandwidth, profiling, distributed execution이 이 전체 과정의 어디에 놓이는지 설명할 수 있으면 된다.
-
----
-
-## 17. 공식 자료와 추가 읽기
-
-문서의 개념 설명과 API 확인에 사용한 자료다. 웹 문서와 `main` 브랜치의 예제는 이후 변경될 수 있다. 실제 실습 때에는 설치 버전과 문서 버전을 함께 확인한다.
-
-### 17.1 먼저 읽을 공통 자료
-
-1. [Scaling Book 9장: How to Profile TPU Code](https://jax-ml.github.io/scaling-book/profiling)  
-   먼저 읽을 부분: **A Thousand-Foot View of the TPU Software Stack**. JAX → StableHLO·HLO → TPU 실행 코드의 큰 흐름.
-2. [PyTorch: torch.compiler](https://docs.pytorch.org/docs/stable/torch.compiler.html)  
-   먼저 읽을 부분: Dynamo, AOT Autograd, Inductor의 역할.
-
-### 17.2 모델과 하드웨어
-
-3. [Scaling Book 4장: Transformers](https://jax-ml.github.io/scaling-book/transformers)  
-   Counting Dots, Transformer Accounting, 필요하면 Flash Attention 부록.
-4. [Scaling Book 2장: TPUs](https://jax-ml.github.io/scaling-book/tpus)  
-   What Is a TPU?의 MXU·VPU·VMEM·HBM.
-5. [Scaling Book 12장: GPUs](https://jax-ml.github.io/scaling-book/gpus)  
-   What Is a GPU?와 Memory. NVIDIA GPU 기준임에 유의.
-
-### 17.3 OpenXLA와 JAX
-
-6. [XLA architecture](https://openxla.org/xla/architecture)
-7. [XLA terminology](https://openxla.org/xla/terminology)
-8. [StableHLO](https://openxla.org/stablehlo)
-9. [PJRT C++ Device API overview](https://openxla.org/xla/pjrt/cpp_api_overview)
-10. [JAX asynchronous dispatch](https://docs.jax.dev/en/latest/async_dispatch.html)
-11. [JAX ahead-of-time lowering and compilation](https://docs.jax.dev/en/latest/aot.html)
-12. [JAX stages](https://docs.jax.dev/en/latest/jax.stages.html)
-13. [jax.make_jaxpr](https://docs.jax.dev/en/latest/_autosummary/jax.make_jaxpr.html)
-14. [JAX benchmarking](https://docs.jax.dev/en/latest/benchmarking.html)
-
-### 17.4 PyTorch와 Triton
-
-15. [torch.compile API](https://docs.pytorch.org/docs/stable/generated/torch.compile.html)
-16. [torch.export](https://docs.pytorch.org/docs/stable/user_guide/torch_compiler/export.html)
-17. [torch.cuda.synchronize](https://docs.pytorch.org/docs/stable/generated/torch.cuda.synchronize.html)
-18. [torch.cuda.Event](https://docs.pytorch.org/docs/stable/generated/torch.cuda.Event.html)
-19. [Triton Vector Addition tutorial](https://triton-lang.org/main/getting-started/tutorials/01-vector-add.html)
-
-### 17.5 Modular MAX와 Mojo
-
-20. [Mojo Manual](https://mojolang.org/docs/manual/)
-21. [MAX: Build a model graph with Module](https://max.modular.com/develop/modules/)
-22. [MAX Graph API](https://max.modular.com/api/python/generated/max.graph.Graph/)
-23. [MAX graph operations](https://max.modular.com/api/python/graph.ops/)
-24. [MAX InferenceSession API](https://max.modular.com/api/python/generated/max.engine.InferenceSession/)
-25. [MAX: Build custom ops for GPUs](https://max.modular.com/develop/build-custom-ops/)
-26. [Mojo GPU introduction tutorial](https://max.modular.com/gpu/intro-tutorial/)
-27. [DeviceContext API](https://max.modular.com/api/mojo/max/gpu/host/device_context/DeviceContext/)
-28. [DeviceBuffer API](https://max.modular.com/api/mojo/max/gpu/host/device_context/DeviceBuffer/)
-29. [Mojo SIMD API](https://mojolang.org/docs/std/simd/SIMD/)
-30. [공식 custom op Mojo 예제](https://github.com/modular/modular/tree/main/max/examples/custom_ops/kernels/add_one.mojo)
-31. [공식 custom op Python 예제](https://github.com/modular/modular/blob/main/max/examples/custom_ops/addition.py)
-32. [공식 독립 Mojo GPU 예제](https://github.com/modular/modular/blob/main/max/examples/gpu-intro/vector_addition.mojo)
-33. [TileTensor API](https://max.modular.com/api/mojo/layout/tile_tensor/TileTensor/)
-
-### 17.6 읽기 우선순위
-
-- **전체 흐름이 목표라면:** 1 → 2 → 6.
-- **IR이 궁금하다면:** 7 → 8 → 11 → JAX 예제.
-- **비동기 실행이 궁금하다면:** 10 → 19 → 26.
-- **칩 내부가 궁금하다면:** 4 또는 5.
-- **Modular 연결이 궁금하다면:** 21 → 25 → 26.
-- **코드 실행 시간이 부족하다면:** 도식과 코드의 입력·출력, `compile`, `execute`, `synchronize` 위치만 찾아도 충분하다.
 
