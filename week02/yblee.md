@@ -3,21 +3,6 @@
 > **핵심 질문**  
 > 모델의 연산 하나가 가속기에서 실행되기까지 어떤 단계를 거치며, 각 단계는 무엇을 담당할까?
 
-- 문서 확인일: **2026-09-19**
-- 공통 예제: **`Y = ReLU(X @ W + b)`**
-- 대상: 모델 코드는 익숙하지만 컴파일러·런타임·가속기 내부의 연결은 처음 정리하는 학습자
-- 범위: 모델의 수식과 텐서 연산부터, 칩의 연산 장치와 메모리에서 실제 계산이 일어나는 지점까지
-- 범위 밖: 반도체 RTL 설계·제조, 상세 Roofline 분석, 고성능 matmul tiling 구현, 제품별 성능 순위
-
-### 예제와 도식을 읽기 전에
-
-1. **이 문서의 Mermaid 도식은 개념도다.** 특정 버전에서 캡처한 실제 컴파일러 그래프나 프로파일러 결과가 아니다.
-2. **완결형 코드도 이 문서 작성 과정에서 실제 실행하지는 않았다.** 공식 문서의 API와 공개 예제를 확인해 구성했으며, 설치 버전·운영체제·드라이버에 따라 조정이 필요할 수 있다.
-3. **`의사 코드`, `개념적 IR`이라고 표시한 블록은 실행 대상이 아니다.** 실제 IR은 함께 제공한 출력 코드로 확인한다.
-4. **코드의 정확성 비교와 성능 비교는 별개다.** 예제의 `assert_close`는 수치 결과를 점검하지만 성능 우위를 증명하지 않는다.
-5. Mojo 공식 문서에서는 확인 당시 **1.1.0** 표시를 확인했다. MAX와 Mojo의 패키지 구성·import 경로는 변경될 수 있으므로, 서로 호환되는 배포 환경을 사용한다.
-6. Mermaid를 지원하는 Markdown 뷰어에서 열면 도식으로 표시된다. 지원하지 않는 뷰어에서는 `mermaid` 코드 블록으로 보인다.
-
 ---
 
 ## 목차
@@ -36,7 +21,9 @@
 12. [세 스택을 같은 기준으로 비교하기](#12-세-스택을-같은-기준으로-비교하기)
 13. [작게 해볼 수 있는 관찰 실험](#13-작게-해볼-수-있는-관찰-실험)
 14. [자주 생기는 오해와 문제 찾기](#14-자주-생기는-오해와-문제-찾기)
-15. [용어 사전과 최종 요약](#16-용어-사전과-최종-요약)
+15. [스터디 발표와 토론 가이드](#15-스터디-발표와-토론-가이드)
+16. [용어 사전과 최종 요약](#16-용어-사전과-최종-요약)
+17. [공식 자료와 추가 읽기](#17-공식-자료와-추가-읽기)
 
 ---
 
@@ -665,10 +652,7 @@ PyTorch 공식 문서에서 `torch.compile`의 기본 backend는 Inductor이며,
 
 ### 8.2 eager와 compile의 출력·gradient 비교
 
-다음은 CPU에서도 실행할 수 있도록 구성한 완결형 예제다. 다만 `torch.compile`이 지원하는 Python·PyTorch 조합과 필요한 컴파일 환경이 있어야 한다.
-
 ```python
-# 파일 예시: 02_pytorch_compile.py
 import torch
 
 print("PyTorch version:", torch.__version__)
@@ -686,7 +670,7 @@ def forward(x, w, b):
 
 
 def run_with_backward(fn):
-    # 같은 입력을 복사하되, 서로 다른 autograd graph를 만든다.
+    # 이전 계산 기록과 분리하고 데이터를 복사한 뒤, 기울기 추적을 활성화
     x = x0.detach().clone().requires_grad_(True)
     w = w0.detach().clone().requires_grad_(True)
     b = b0.detach().clone().requires_grad_(True)
@@ -713,8 +697,18 @@ for name, expected, actual in zip(
     eager_result,
     compiled_result,
 ):
+    # 2개의 원소가 충분히 가까운티 테스트
     torch.testing.assert_close(actual, expected, rtol=1e-4, atol=1e-5)
     print(name, "OK", tuple(actual.shape))
+```
+
+```
+PyTorch version: 2.11.0+cpu
+Y OK (32, 8)
+loss OK ()
+dX OK (32, 16)
+dW OK (16, 8)
+db OK (8,)
 ```
 
 이 예제에서는 다음 점에 주목한다.
@@ -724,32 +718,36 @@ for name, expected, actual in zip(
 - `loss = y.square().mean()`은 gradient를 관찰하기 위해 추가한 예제 목적 함수다.
 - 첫 실행에는 tracing·컴파일 비용이 포함될 수 있다.
 - 이 작은 입력에서 compile이 eager보다 빠르다고 가정하지 않는다.
-- AOT Autograd의 `AOT`를 독립 실행 파일로 미리 배포한다는 의미와 혼동하지 않는다. 여기서는 forward·backward 그래프를 미리 포착·분리하는 역할에 주목한다.
 
 ### 8.3 FX·ATen 수준의 그래프 보기
 
-다음은 앞 예제의 변수와 클래스를 이어서 사용하는 코드다.
+내가 작성한 계산이 PyTorch 내부에서 어떤 연산과 연결되는지 확인해보기
 
 ```python
 class ReluMatmul(torch.nn.Module):
     def forward(self, x, w, b):
         return torch.relu(x @ w + b)
-
+# 이 모듈에 x0, w0, b0 같은 입력이 들어올 때 수행하는 계산을 그래프로 기록하기
 exported = torch.export.export(ReluMatmul(), (x0, w0, b0))
 print(exported.graph_module.graph)
 ```
 
-관찰할 항목:
-
-- 입력 placeholder가 무엇인가?
-- matmul, add, ReLU가 어떤 ATen 연산 이름으로 표현되는가?
-- 출력 노드는 무엇을 반환하는가?
+```
+graph():
+    %x : [num_users=1] = placeholder[target=x]
+    %w : [num_users=1] = placeholder[target=w]
+    %b : [num_users=1] = placeholder[target=b]
+    %matmul : [num_users=1] = call_function[target=torch.ops.aten.matmul.default](args = (%x, %w), kwargs = {})
+    %add : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%matmul, %b), kwargs = {})
+    %relu : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%add,), kwargs = {})
+    return (relu,)
+```
 
 이 그래프는 **최종 GPU 커널 목록이나 어셈블리가 아니다.** 또한 `torch.export`로 본 그래프와 `torch.compile` 내부의 모든 중간 그래프가 문자 단위로 동일하다고 가정하면 안 된다.
 
 ### 8.4 GPU timing의 최소 예제
 
-아래는 앞 예제를 GPU에서 실행한 경우에만 사용할 추가 코드다. CPU 모드에서는 일부러 오류를 낸다.
+아래는 앞 예제를 GPU에서 실행한 경우에만 사용할 추가 코드다. 
 
 ```python
 import time
@@ -773,6 +771,10 @@ with torch.no_grad():
     print("반복 실행 평균 wall-clock 시간(ms):", elapsed_ms)
 ```
 
+```
+반복 실행 평균 wall-clock 시간(ms): 0.06251001000009637
+```
+
 이것은 여러 실행을 제출한 뒤 완료까지 기다리는 평균 wall-clock 측정이다. 순수한 단일 GPU 커널 시간과 같지 않다. `no_grad` 등 실행 조건이 달라지면 새로운 컴파일이 발생할 수 있으므로, 측정과 같은 조건으로 워밍업한다.
 
 ---
@@ -788,7 +790,7 @@ with torch.no_grad():
 | XLA | 계산을 최적화하고 대상 장치의 코드로 변환하는 컴파일러 | 실행 방법을 만드는 엔진 |
 | PJRT | 프레임워크와 장치 플러그인·런타임 사이에서 컴파일·버퍼·실행을 다루는 공통 API | 장치 구현과의 접점 |
 
-**PJRT를 단순히 “XLA 다음에 붙는 커널 실행기”로만 이해하면 좁다.** 장치 열거, 버퍼 관리, 컴파일 요청, executable 실행 같은 역할을 연결한다. 실제 JAX 구현에는 추가 런타임 추상화가 들어갈 수 있으며, 아래 도식은 그 세부 계층을 생략했다.
+**PJRT를 단순히 “XLA 다음에 붙는 커널 실행기”로만 이해하면 좁다.** 장치관리, 버퍼 관리, 컴파일 요청, executable 실행 같은 역할을 연결한다. 실제 JAX 구현에는 추가 런타임 추상화가 들어갈 수 있으며, 아래 도식은 그 세부 계층을 생략했다.
 
 공식 PJRT 문서는 client, device, buffer, compiler, loaded executable을 구분한다.
 
@@ -867,6 +869,160 @@ print("=== Compiled program text ===")
 print(compiled.as_text())
 ```
 
+```
+JAX version: 0.11.1
+Available devices: [CudaDevice(id=0)]
+=== Jaxpr ===
+{ lambda ; a:f32[2,3] b:f32[3,2] c:f32[2]. let
+    d:f32[2,2] = dot_general[
+      dimension_numbers=(([1], [0]), ([], []))
+      preferred_element_type=float32
+    ] a b
+    e:f32[1,2] = broadcast_in_dim[broadcast_dimensions=(1,)] c
+    f:f32[2,2] = add d e
+    g:f32[2,2] = custom_jvp_call[
+      name=relu
+      call_jaxpr={ lambda ; h:f32[2,2]. let
+          i:f32[2,2] = jit[
+            name=relu
+            jaxpr={ lambda ; h:f32[2,2]. let
+                i:f32[2,2] = max h 0.0:f32[]
+              in (i,) }
+          ] h
+        in (i,) }
+      jvp=jvp
+      symbolic_zeros=False
+    ] f
+  in (g,) }
+=== StableHLO ===
+module @jit_forward attributes {mhlo.num_partitions = 1 : i32, mhlo.num_replicas = 1 : i32} {
+  func.func public @main(%arg0: tensor<2x3xf32>, %arg1: tensor<3x2xf32>, %arg2: tensor<2xf32>) -> (tensor<2x2xf32> {jax.result_info = "result"}) {
+    %0 = stablehlo.dot_general %arg0, %arg1, contracting_dims = [1] x [0], precision = [DEFAULT, DEFAULT] : (tensor<2x3xf32>, tensor<3x2xf32>) -> tensor<2x2xf32>
+    %1 = stablehlo.broadcast_in_dim %arg2, dims = [1] : (tensor<2xf32>) -> tensor<1x2xf32>
+    %2 = stablehlo.broadcast_in_dim %1, dims = [0, 1] : (tensor<1x2xf32>) -> tensor<2x2xf32>
+    %3 = stablehlo.add %0, %2 : tensor<2x2xf32>
+    %4 = call @relu(%3) : (tensor<2x2xf32>) -> tensor<2x2xf32>
+    return %4 : tensor<2x2xf32>
+  }
+  func.func private @relu(%arg0: tensor<2x2xf32>) -> tensor<2x2xf32> {
+    %cst = stablehlo.constant dense<0.000000e+00> : tensor<f32>
+    %0 = stablehlo.broadcast_in_dim %cst, dims = [] : (tensor<f32>) -> tensor<2x2xf32>
+    %1 = stablehlo.maximum %arg0, %0 : tensor<2x2xf32>
+    return %1 : tensor<2x2xf32>
+  }
+}
+
+Y = [[0.  6. ]
+ [1.5 0. ]]
+=== Compiled program text ===
+HloModule jit_forward, is_scheduled=true, entry_computation_layout={(f32[2,3]{1,0}, f32[3,2]{1,0}, f32[2]{0})->f32[2,2]{1,0}}, allow_spmd_sharding_propagation_to_parameters={true,true,true}, allow_spmd_sharding_propagation_to_output={true}, frontend_attributes={fingerprint_before_lhs="d128c9be3626104cd35c564c26157e9a"}
+
+FileNames
+1 "<frozen runpy>"
+2 "/usr/local/lib/python3.13/dist-packages/colab_kernel_launcher.py"
+3 "/usr/local/lib/python3.13/dist-packages/traitlets/config/application.py"
+4 "/usr/local/lib/python3.13/dist-packages/ipykernel/kernelapp.py"
+5 "/usr/local/lib/python3.13/dist-packages/tornado/platform/asyncio.py"
+6 "/usr/local/lib/python3.13/dist-packages/ipykernel/kernelbase.py"
+7 "/usr/local/lib/python3.13/dist-packages/ipykernel/ipkernel.py"
+8 "/usr/local/lib/python3.13/dist-packages/ipykernel/zmqshell.py"
+9 "/usr/local/lib/python3.13/dist-packages/IPython/core/interactiveshell.py"
+10 "/usr/local/lib/python3.13/dist-packages/IPython/core/async_helpers.py"
+11 "/tmp/ipykernel_898/1494183818.py"
+
+FunctionNames
+1 "_run_module_as_main"
+2 "_run_code"
+3 "<module>"
+4 "Application.launch_instance"
+5 "IPKernelApp.start"
+6 "BaseAsyncIOLoop.start"
+7 "Kernel.dispatch_queue"
+8 "Kernel.process_one"
+9 "Kernel.dispatch_shell"
+10 "Kernel.execute_request"
+11 "IPythonKernel.do_execute"
+12 "ZMQInteractiveShell.run_cell"
+13 "InteractiveShell.run_cell"
+14 "InteractiveShell._run_cell"
+15 "_pseudo_sync_runner"
+16 "InteractiveShell.run_cell_async"
+17 "InteractiveShell.run_ast_nodes"
+18 "InteractiveShell.run_code"
+19 "forward"
+
+FileLocations
+1 {file_name_id=1 function_name_id=1 line=203 end_line=204 column=11 end_column=42}
+2 {file_name_id=1 function_name_id=2 line=88 end_line=88 column=4 end_column=27}
+3 {file_name_id=2 function_name_id=3 line=37 end_line=37 column=2 end_column=34}
+4 {file_name_id=3 function_name_id=4 line=992 end_line=992 column=8 end_column=19}
+5 {file_name_id=4 function_name_id=5 line=712 end_line=712 column=16 end_column=36}
+6 {file_name_id=5 function_name_id=6 line=211 end_line=211 column=8 end_column=39}
+7 {file_name_id=6 function_name_id=7 line=510 end_line=510 column=16 end_column=40}
+8 {file_name_id=6 function_name_id=8 line=499 end_line=499 column=8 end_column=29}
+9 {file_name_id=6 function_name_id=9 line=406 end_line=406 column=20 end_column=32}
+10 {file_name_id=6 function_name_id=10 line=730 end_line=730 column=28 end_column=47}
+11 {file_name_id=7 function_name_id=11 line=383 end_line=388 column=26 end_column=21}
+12 {file_name_id=8 function_name_id=12 line=528 end_line=528 column=15 end_column=48}
+13 {file_name_id=9 function_name_id=13 line=2975 end_line=2977 column=21 end_column=13}
+14 {file_name_id=9 function_name_id=14 line=3030 end_line=3030 column=19 end_column=31}
+15 {file_name_id=10 function_name_id=15 line=78 end_line=78 column=8 end_column=23}
+16 {file_name_id=9 function_name_id=16 line=3257 end_line=3258 column=29 end_column=85}
+17 {file_name_id=9 function_name_id=17 line=3473 end_line=3473 column=24 end_column=70}
+18 {file_name_id=9 function_name_id=18 line=3553 end_line=3553 column=20 end_column=69}
+19 {file_name_id=11 function_name_id=3 line=24 end_line=24 column=10 end_column=41}
+20 {file_name_id=11 function_name_id=19 line=16 end_line=16 column=11 end_column=33}
+21 {file_name_id=11 function_name_id=19 line=16 end_line=16 column=23 end_column=28}
+
+StackFrames
+1 {file_location_id=1 parent_frame_id=1}
+2 {file_location_id=2 parent_frame_id=2}
+3 {file_location_id=3 parent_frame_id=3}
+4 {file_location_id=4 parent_frame_id=4}
+5 {file_location_id=5 parent_frame_id=5}
+6 {file_location_id=6 parent_frame_id=6}
+7 {file_location_id=7 parent_frame_id=7}
+8 {file_location_id=8 parent_frame_id=8}
+9 {file_location_id=9 parent_frame_id=9}
+10 {file_location_id=10 parent_frame_id=10}
+11 {file_location_id=11 parent_frame_id=11}
+12 {file_location_id=12 parent_frame_id=12}
+13 {file_location_id=13 parent_frame_id=13}
+14 {file_location_id=14 parent_frame_id=14}
+15 {file_location_id=15 parent_frame_id=15}
+16 {file_location_id=16 parent_frame_id=16}
+17 {file_location_id=17 parent_frame_id=17}
+18 {file_location_id=18 parent_frame_id=18}
+19 {file_location_id=19 parent_frame_id=19}
+20 {file_location_id=20 parent_frame_id=20}
+21 {file_location_id=21 parent_frame_id=20}
+
+
+%fused_maximum (param_0.4: f32[2,2], param_1.6: f32[2]) -> f32[2,2] {
+  %param_0.4 = f32[2,2]{1,0} parameter(0)
+  %param_1.6 = f32[2]{0} parameter(1)
+  %add.6.3 = f32[2,2]{1,0} broadcast(%param_1.6), dimensions={1}, metadata={op_name="jit(forward)/add" stack_frame_id=21}
+  %add.7.3 = f32[2,2]{1,0} add(%param_0.4, %add.6.3), metadata={op_name="jit(forward)/add" stack_frame_id=21}
+  %constant_0_1 = f32[] constant(0), metadata={op_name="jit(forward)/jit(relu)" stack_frame_id=20}
+  %broadcast.0.1 = f32[2,2]{1,0} broadcast(%constant_0_1), dimensions={}, metadata={op_name="jit(forward)/jit(relu)" stack_frame_id=20}
+  ROOT %max.0.1 = f32[2,2]{1,0} maximum(%add.7.3, %broadcast.0.1), metadata={op_name="jit(forward)/jit(relu)/max" stack_frame_id=20}
+}
+
+%wrapped_dot_computation (param_0.5: f32[2,3], param_1.7: f32[3,2]) -> f32[2,2] {
+  %param_0.5 = f32[2,3]{1,0} parameter(0)
+  %param_1.7 = f32[3,2]{1,0} parameter(1)
+  ROOT %dot_general.1.1 = f32[2,2]{1,0} dot(%param_0.5, %param_1.7), lhs_contracting_dims={1}, rhs_contracting_dims={0}, metadata={op_name="jit(forward)/dot_general" stack_frame_id=21}
+}
+
+ENTRY %main.2 (x.1: f32[2,3], w.1: f32[3,2], b.1: f32[2]) -> f32[2,2] {
+  %b.1 = f32[2]{0} parameter(2), metadata={op_name="b"}
+  %w.1 = f32[3,2]{1,0} parameter(1), metadata={op_name="w"}
+  %x.1 = f32[2,3]{1,0} parameter(0), metadata={op_name="x"}
+  %wrapped_dot = f32[2,2]{1,0} fusion(%x.1, %w.1), kind=kLoop, calls=%wrapped_dot_computation, metadata={op_name="jit(forward)/dot_general" stack_frame_id=21}, backend_config={"device_type":"DEVICE_TYPE_INVALID","force_earliest_schedule":false,"native_emitter_backend_config":{"type":"NATIVE_EMITTER_TYPE_INVALID","unroll_factor":0},"operation_queue_id":"0","reification_cost":[]}
+  ROOT %loop_maximum_fusion = f32[2,2]{1,0} fusion(%wrapped_dot, %b.1), kind=kLoop, calls=%fused_maximum, metadata={op_name="jit(forward)/jit(relu)/max" stack_frame_id=20}, backend_config={"device_type":"DEVICE_TYPE_INVALID","force_earliest_schedule":false,"native_emitter_backend_config":{"type":"NATIVE_EMITTER_TYPE_INVALID","unroll_factor":0},"operation_queue_id":"0","reification_cost":[]}
+}
+```
+
 #### 각 출력은 무엇을 보여줄까?
 
 | 출력 | 관찰하는 수준 | 이것만으로 알 수 없는 것 |
@@ -874,7 +1030,6 @@ print(compiled.as_text())
 | `make_jaxpr` | JAX primitive와 계산 관계 | 최종 커널 개수·기계 명령 |
 | `compiler_ir("stablehlo")` | StableHLO 기반 표현 | 최종 메모리 접근 전체 |
 | `compiled.as_text()` | backend가 제공하는 컴파일 후 표현 | 실제 실행 시간·병목의 전체 모습 |
-| profiler trace | 실제 실행 중 관측된 이벤트와 시간 | 모든 하드웨어 내부 상태 |
 
 JAX의 IR 출력 API는 디버깅·검사용이다. 버전과 backend에 따라 연산 이름, 출력 형식, 가용성이 달라질 수 있다. 실제 코드를 실행하기 전에는 위 출력이 정확히 어떤 문자열이 될지 단정하지 않는다.
 
@@ -915,6 +1070,11 @@ print("loss:", loss_value)
 print("gradient shapes:", dx.shape, dw.shape, db.shape)
 ```
 
+```
+loss: 9.5625
+gradient shapes: (2, 3) (3, 2) (2,)
+```
+
 순전파만 연산 그래프로 바뀌는 것이 아니다. 자동 미분이 만드는 gradient 계산에도 행렬곱, 원소별 연산, reduction이 있으며, 이 계산도 컴파일과 실행의 대상이 된다.
 
 ### 9.6 JAX에서 동기화를 포함해 시간 재기
@@ -941,7 +1101,12 @@ ms = (time.perf_counter() - start) * 1000 / iterations
 print("호출별 완료 대기를 포함한 평균(ms):", ms)
 ```
 
-이 예제는 이해하기 쉬운 작은 입력을 사용하므로 host overhead 비중이 클 수 있다. 성능 실험을 하려면 더 큰 shape, 동일한 입력 준비 조건, 충분한 반복, 장치 상태 등을 함께 고려해야 한다.
+```
+호출별 완료 대기를 포함한 평균(ms): 0.15710304000094766
+```
+
+이 예제는 이해하기 쉬운 작은 입력을 사용하므로 host overhead 비중이 클 수 있다.
+성능 실험을 하려면 더 큰 shape, 동일한 입력 준비 조건, 충분한 반복, 장치 상태 등을 함께 고려해야 한다.
 
 ### 9.7 TPU에서는 그 다음에 무엇이 일어날까?
 
@@ -990,7 +1155,7 @@ flowchart TB
 
 MAX의 `Graph` 구성은 계산을 기록하는 단계다. `Module`이나 그래프를 정의하는 Python 코드가 실행되었다고 해서 해당 텐서의 수치 계산이 이미 끝난 것은 아니다.
 
-공식 문서는 MAX module 호출이 계산을 실행하는 대신 그래프에 기록하며, 실행 전 그래프 컴파일이 필요하다고 설명한다.<citation refs="fWVAWNoxEBFCHk11KlzVM">calling a MAX module records the computation into a graph that must be compiled before it can execute.</citation>
+공식 문서는 MAX module 호출이 계산을 실행하는 대신 그래프에 기록하며, 실행 전 그래프 컴파일이 필요하다고 설명한다.
 
 ### 10.3 MAX Graph로 전체 수식 실행하기
 
@@ -1049,7 +1214,7 @@ np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-5)
 print("MAX Y =", actual)
 ```
 
-`compile()`은 컴파일된 artifact를 만들고, `init()`은 실행 가능한 모델로 초기화한다. 문서에는 이 둘을 함께 처리하는 `load()` 경로도 있다. 이 노트는 **컴파일과 실행 준비를 구분하기 위해** 둘을 나눠 썼다.<citation refs="0GgtRn1NeNbP6YziAlikM">compile ... Compiles a model without binding weights or device memory. ... init ... Initializes a compiled model with weights for execution.</citation>
+`compile()`은 컴파일된 artifact를 만들고, `init()`은 실행 가능한 모델로 초기화한다. 문서에는 이 둘을 함께 처리하는 `load()` 경로도 있다. 이 노트는 **컴파일과 실행 준비를 구분하기 위해** 둘을 나눠 썼다.
 
 ### 10.4 Mojo custom op를 MAX 그래프에 연결하기
 
@@ -1331,7 +1496,7 @@ mojo 05_mojo_bias_relu.mojo
 
 이 예제의 `bias`는 길이 `M`인 벡터 그대로다. `tid % M`으로 열을 찾아 모든 행에 같은 편향을 적용한다. 이것이 broadcast의 구체적인 구현 예다.
 
-공식 Mojo GPU 튜토리얼은 같은 `DeviceContext`의 작업이 제출 순서를 따르며, `synchronize()`가 완료를 기다리는 역할임을 설명한다.<citation refs="nMRGYlJwT7U8ifNX8YTCL">Operations within a stream execute in the order they are issued. ... synchronize ... blocks until the device completes all operations in its queue.</citation>
+공식 Mojo GPU 튜토리얼은 같은 `DeviceContext`의 작업이 제출 순서를 따르며, `synchronize()`가 완료를 기다리는 역할임을 설명한다.
 
 #### 여기서 반드시 피해야 할 오해
 
@@ -1466,7 +1631,7 @@ if __name__ == "__main__":
 
 **Triton의 `BLOCK_SIZE=256`을 CUDA thread 256개와 일대일로 같은 뜻이라고 보면 안 된다.** 이 값은 여기서 program이 다루는 원소 블록 크기이며, 실제 thread·warp 배치는 컴파일러와 설정의 영향을 받는다.
 
-Triton 공식 vector addition 예제 역시 `program_id`, offset, mask, launch grid, 비동기 반환을 분리해서 보여준다.<citation refs="51b-eFn08lWAsOsKi97ic">The SPMD launch grid denotes the number of kernel instances that run in parallel. ... the kernel is still running asynchronously at this point.</citation>
+Triton 공식 vector addition 예제 역시 `program_id`, offset, mask, launch grid, 비동기 반환을 분리해서 보여준다.
 
 ### 11.4 여기서 fusion이라고 말할 수 있는 범위
 
