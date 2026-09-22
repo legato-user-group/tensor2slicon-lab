@@ -12,9 +12,11 @@ Scaling Book 2장의 What Is a TPU? 또는 12장의 What Is a GPU?와 Memory 중
 
 **TPU는 기본적으로 행렬 곱셈에 특화된 컴퓨팅 코어(TensorCore)와 고속 메모리 스택(HBM)이 연결된 구조**
 
-!image.png
+<img width="1260" height="632" alt="image" src="https://github.com/user-attachments/assets/3580ad51-f8d7-4907-973b-7769dc84fbfc" />
 
-!image.png
+
+<img width="1266" height="478" alt="image" src="https://github.com/user-attachments/assets/dad2631a-c905-482f-8cbe-40c22315cb2a" />
+
 
 ### Tensor Core의 구성요소
 
@@ -35,7 +37,8 @@ Scaling Book 2장의 What Is a TPU? 또는 12장의 What Is a GPU?와 Memory 중
 
 **현재 나오는 GPU (H100, B200 등)는 Streaming Multiprocessors** or **SMs라 불리는 Matrix Multiplication에 특화된 많은 코어들이 HBM에 연결되어있음**
 
-!image.png
+<img width="1268" height="592" alt="image" src="https://github.com/user-attachments/assets/81fa817c-733a-4910-a37f-5c72b5845218" />
+
 
 - Streaming Multiprocessors (SMs)의 구성
     - Tensor Core (matrix multiplication core)
@@ -58,12 +61,13 @@ Scaling Book 2장의 What Is a TPU? 또는 12장의 What Is a GPU?와 Memory 중
             - SMEM(+TMEM)보다 훨씬 더 많은 VMEM을 보유
             - 이 메모리를 사용하여 가중치와 활성화 값을 매우 빠르게 로드하고 사용할 수 있도록 저장
         
-        !image.png
+        <img width="1114" height="332" alt="image" src="https://github.com/user-attachments/assets/04e88ebd-9b54-45d4-94eb-221d3b01e32c" />
+
         
+        <img width="660" height="916" alt="image" src="https://github.com/user-attachments/assets/9f5409fe-fbdc-4ef9-aad1-590e4a244409" />
 
-!image.png
-
-!image.png
+        
+        <img width="1248" height="480" alt="image" src="https://github.com/user-attachments/assets/03f97abc-179c-45e2-af2b-fe42ba60d029" />
 
 ## 하드웨어에서 알고리즘을 실행할 때, 고려해야할 3가지 제약 조건
 
@@ -75,17 +79,16 @@ Scaling Book 2장의 What Is a TPU? 또는 12장의 What Is a GPU?와 Memory 중
         - H100에서는 약 3.35TB/s
         - TPU v6e에서는 약 1.6TB/s
         
-        !image.png
-        
-        !image.png
-        
-        !image.png
+        <img width="1130" height="874" alt="image" src="https://github.com/user-attachments/assets/b29c7148-2b71-4f2c-9b9f-57588e61c43c" />
+
+
         
     - computation, communication time 측정에 lower bound, upper bound를 두고 계산할 수 있음
         - COmputation time이 크다면 사용 가능한 Flops를 최대한 사용
         - Communication time이 크다면 데이터 통신 병목이 엄청 큰 것, Flops 계산 효율 버리는 것
         
-        !image.png
+        <img width="962" height="334" alt="image" src="https://github.com/user-attachments/assets/9e2f78bf-4693-44d0-b5e2-f27081119be1" />
+
         
 - 셋째는 데이터를 저장하는 데 사용할 수 있는 총 메모리 용량(바이트 수)
 
@@ -157,13 +160,15 @@ y = jax.jit(multiply)(jnp.ones((128, 256)), jnp.ones((256, 16), dtype=jnp.bfloat
         - **연산들의 의존 관계를 그린 그림**
         - 연산 하나가 **노드** 가 되고, “이 연산의 결과가 저 연산의 입력으로 들어간다"는 관계가 **간선** 이 됩니다. 결과가 자기 자신에게 되돌아오는 일은 없으니 방향이 있고 순환이 없는 그래프, 즉 **방향 비순환 그래프(Directed Acyclic Graph, DAG)** 가 됩니다.
         
-        !image.png
+        <img width="1116" height="696" alt="image" src="https://github.com/user-attachments/assets/7b01e5e9-3002-4978-bc99-f46ce365cc59" />
+
         
 - python으로 작성 되었으며 pytorch가 C++에서 python으로 코드가 변하게 된 계기
 
 종류
 
-!image.png
+<img width="1262" height="878" alt="image" src="https://github.com/user-attachments/assets/a410b344-8345-4971-9e07-d03251a5bf45" />
+
 
 - **TorchDynamo(torch._dynamo)**
     - CPython feature를 사용한 internal API
@@ -182,16 +187,19 @@ y = jax.jit(multiply)(jnp.ones((128, 256)), jnp.ones((256, 16), dtype=jnp.bfloat
     - 같은 연산을 부르는 여러 방법을 하나로 통일하고, 부작용을 걷어내고, 연산의 종류를 줄임
         - 예시
             
-            !image.png
+            <img width="1050" height="564" alt="image" src="https://github.com/user-attachments/assets/aa1fe510-f4be-45d1-9a05-5b1c891ff195" />
+
             
 - 가장 많이 사용하는 백엔드
     
-    !image.png
+    <img width="1180" height="632" alt="image" src="https://github.com/user-attachments/assets/ad571712-4953-4394-8271-ade474eba7b5" />
+
     
 
 # Sharded
 
-!image.png
+<img width="1260" height="648" alt="image" src="https://github.com/user-attachments/assets/3b663471-890d-478c-ab14-9f3dead7836d" />
+
 
 **AllGather란 무엇일까요?**
 
@@ -201,7 +209,8 @@ y = jax.jit(multiply)(jnp.ones((128, 256)), jnp.ones((256, 16), dtype=jnp.bfloat
 - Model의 Loss와 같은 것을 AllGather할 때 모든 파라미터를 한번에 하는 것이 아닌 block단위나 layer 단위로 AllGather 하는 것
     - M_{peak}≈M_{persistent shards}+M_{current full layer}+M_{activation}+M_{temporary buffer}
 
-!image.png
+<img width="1182" height="274" alt="image" src="https://github.com/user-attachments/assets/993f897d-9f1f-4ead-b1bb-ae1d309ba374" />
+
 
 전부 **여러 GPU가 가지고 있는 텐서를 어떻게 서로 주고받고, 합치고, 다시 나눌지**를 정의하는 collective communication
 
@@ -228,12 +237,14 @@ Scaling Book 4장의 Counting Dots, Transformer Accounting 중심
 
 ## Counting Dots
 
-!image.png
+<img width="480" height="556" alt="image" src="https://github.com/user-attachments/assets/7ad1fc15-2ce4-4506-b473-2579fde098ce" />
+
 
 - x*y 는 P번 더하거나 곱하는 연산, 2P floating point operational total
 - AB = 2*NPM FLOPS
 
-!image.png
+<img width="1222" height="364" alt="image" src="https://github.com/user-attachments/assets/17876755-6f92-42d4-8bc6-9186ed2f5d43" />
+
 
 - 각 Element에 대해서 곱하고, 나중에 Sum을 하기 때문에 2배가 됨
 - 
