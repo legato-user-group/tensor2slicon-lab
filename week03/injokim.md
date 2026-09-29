@@ -36,9 +36,9 @@ A[0][0] * B[0][0] + A[0][1] * B[1][0]
 
 다만 GPU 성능 분석에서는 일반적으로 GEMM의 연산량을
 
-\[
-FLOPs = 2 \times M \times N \times K
-\]
+$$
+\mathrm{FLOPs} = 2 \times M \times N \times K
+$$
 
 로 계산합니다.
 
@@ -46,9 +46,9 @@ FLOPs = 2 \times M \times N \times K
 
 따라서 위 예제에서는
 
-\[
-2 \times 3 \times 3 \times 2 = 36 FLOPs
-\]
+$$
+2 \times 3 \times 3 \times 2 = 36\ \mathrm{FLOPs}
+$$
 
 가 됩니다.
 
@@ -97,9 +97,9 @@ C Write = 100 × 4 = 400 Bytes
 
 이므로
 
-\[
-Algorithmic\ Bytes = 1200 Bytes
-\]
+$$
+\text{Algorithmic Bytes} = 1200\ \mathrm{Bytes}
+$$
 
 입니다.
 
@@ -127,9 +127,9 @@ Actual DRAM Traffic = 1500 Bytes
 
 Bandwidth는 기본적으로
 
-\[
-Bandwidth = \frac{Bytes}{Execution\ Time}
-\]
+$$
+\text{Bandwidth} = \frac{\mathrm{Bytes}}{\text{Execution Time}}
+$$
 
 입니다.
 
@@ -137,11 +137,11 @@ Bandwidth = \frac{Bytes}{Execution\ Time}
 
 ### Effective Bandwidth
 
-\[
-Effective\ Bandwidth
+$$
+\text{Effective Bandwidth}
 =
-\frac{Algorithmic\ Bytes}{Execution\ Time}
-\]
+\frac{\text{Algorithmic Bytes}}{\text{Execution Time}}
+$$
 
 즉,
 
@@ -151,11 +151,11 @@ Effective\ Bandwidth
 
 ### Actual / Achieved Memory Throughput
 
-\[
-Actual\ Memory\ Throughput
+$$
+\text{Actual Memory Throughput}
 =
-\frac{Actual\ Traffic}{Execution\ Time}
-\]
+\frac{\text{Actual Traffic}}{\text{Execution Time}}
+$$
 
 즉,
 
@@ -195,9 +195,9 @@ Peak DRAM Bandwidth = 1.5 TB/s
 
 이면
 
-\[
-Achieved\ DRAM\ Bandwidth = 1TB/s
-\]
+$$
+\text{Achieved DRAM Bandwidth} = 1\ \mathrm{TB/s}
+$$
 
 이고 Peak 대비 약 66.7%입니다.
 
@@ -285,53 +285,53 @@ HBM Capacity = 16 GB
 
 이를 단순한 모델로 분석하면 다음과 같습니다.
 
-\[
+$$
 T_{compute}
 =
-\frac{FLOPs}{Compute\ Throughput}
-\]
+\frac{\mathrm{FLOPs}}{\text{Compute Throughput}}
+$$
 
-\[
+$$
 T_{memory}
 =
-\frac{Bytes}{Memory\ Bandwidth}
-\]
+\frac{\mathrm{Bytes}}{\text{Memory Bandwidth}}
+$$
 
 단위는 각각
 
-\[
-\frac{FLOPs}{FLOPs/s}=s
-\]
+$$
+\frac{\mathrm{FLOPs}}{\mathrm{FLOPs/s}} = \mathrm{s}
+$$
 
-\[
-\frac{Bytes}{Bytes/s}=s
-\]
+$$
+\frac{\mathrm{Bytes}}{\mathrm{Bytes/s}} = \mathrm{s}
+$$
 
 이므로 시간입니다.
 
 병목을 추정할 때는 보통 실제 Achieved FLOP/s나 Achieved Bandwidth가 아니라 **Peak 또는 attainable throughput**을 사용합니다.
 
-\[
+$$
 T_{compute}
 =
-\frac{FLOPs}{Peak\ Compute\ Throughput}
-\]
+\frac{\mathrm{FLOPs}}{\text{Peak Compute Throughput}}
+$$
 
-\[
+$$
 T_{memory}
 =
-\frac{Algorithmic\ Bytes}{Peak\ Memory\ Bandwidth}
-\]
+\frac{\text{Algorithmic Bytes}}{\text{Peak Memory Bandwidth}}
+$$
 
 실제 Achieved 값은 이미 Kernel Time을 포함하고 있기 때문에 이를 다시 나누면 결국 Kernel Time이 나오기 때문입니다.
 
 연산과 데이터 이동이 충분히 overlap된다고 가정하면
 
-\[
+$$
 T_{kernel}
 \approx
 \max(T_{compute}, T_{memory})
-\]
+$$
 
 로 볼 수 있습니다.
 
@@ -346,11 +346,11 @@ T_memory > T_compute → Memory-bound
 
 다만 이 값은 이상적인 최소 실행시간의 기준입니다. 실제 실행에는 latency, dependency, synchronization, occupancy, pipeline stall 등이 존재하므로
 
-\[
+$$
 T_{actual}
 \ge
 \max(T_{compute},T_{memory})
-\]
+$$
 
 라고 보는 것이 더 정확합니다.
 
@@ -360,9 +360,9 @@ T_{actual}
 
 길이가
 
-\[
+$$
 N=100,000,000
-\]
+$$
 
 인 FP32 Vector A, B를 더해 C에 저장한다고 가정합니다.
 
@@ -383,11 +383,11 @@ HBM Bandwidth           = 1 × 10^12 Byte/s
 
 Vector 하나의 크기는
 
-\[
+$$
 100,000,000 \times 4
 =
 400,000,000 Byte
-\]
+$$
 
 이므로
 
@@ -399,9 +399,9 @@ C Write = 400 MB
 
 총 Algorithmic Bytes는
 
-\[
-1.2GB
-\]
+$$
+1.2\ \mathrm{GB}
+$$
 
 입니다.
 
@@ -409,37 +409,37 @@ C Write = 400 MB
 
 각 원소마다 덧셈 한 번이 발생하므로
 
-\[
-Total\ FLOPs = 100,000,000 = 1\times10^8
-\]
+$$
+\text{Total FLOPs} = 100{,}000{,}000 = 1 \times 10^8
+$$
 
 입니다.
 
 ### Compute Time
 
-\[
+$$
 T_{compute}
 =
 \frac{1\times10^8}
 {20\times10^{12}}
 =
-5\times10^{-6}s
+5 \times 10^{-6}\ \mathrm{s}
 =
-0.005ms
-\]
+0.005\ \mathrm{ms}
+$$
 
 ### Memory Time
 
-\[
+$$
 T_{memory}
 =
 \frac{1.2\times10^9}
 {1\times10^{12}}
 =
-1.2\times10^{-3}s
+1.2 \times 10^{-3}\ \mathrm{s}
 =
-1.2ms
-\]
+1.2\ \mathrm{ms}
+$$
 
 따라서
 
@@ -452,9 +452,9 @@ Memory Time  = 1.2 ms
 
 예상 최소 실행시간은 단순 모델에서 약
 
-\[
-1.2ms
-\]
+$$
+1.2\ \mathrm{ms}
+$$
 
 입니다.
 
@@ -480,13 +480,13 @@ Compute Throughput을 두 배 늘려도
 
 로 늘리면
 
-\[
+$$
 T_{memory}
 =
-\frac{1.2GB}{2TB/s}
+\frac{1.2\ \mathrm{GB}}{2\ \mathrm{TB/s}}
 =
-0.6ms
-\]
+0.6\ \mathrm{ms}
+$$
 
 로 줄어듭니다.
 
@@ -523,15 +523,15 @@ Bandwidth → 얼마나 빨리 옮기느냐?
 
 ### Effective Bandwidth
 
-\[
-\frac{Algorithmic\ Bytes}{Execution\ Time}
-\]
+$$
+\frac{\text{Algorithmic Bytes}}{\text{Execution Time}}
+$$
 
 ### Actual / Achieved Memory Throughput
 
-\[
-\frac{Actual\ Traffic}{Execution\ Time}
-\]
+$$
+\frac{\text{Actual Traffic}}{\text{Execution Time}}
+$$
 
 ### Peak Bandwidth
 하드웨어가 제공할 수 있는 최대 데이터 전송률
@@ -544,17 +544,17 @@ workload 실행에 필요한 실제 메모리 양
 
 ### Compute / Memory Bound
 
-\[
+$$
 T_{compute}
 =
-\frac{FLOPs}{Peak\ FLOP/s}
-\]
+\frac{\mathrm{FLOPs}}{\text{Peak FLOP/s}}
+$$
 
-\[
+$$
 T_{memory}
 =
-\frac{Algorithmic\ Bytes}{Peak\ Bandwidth}
-\]
+\frac{\text{Algorithmic Bytes}}{\text{Peak Bandwidth}}
+$$
 
 ```text
 T_compute > T_memory → Compute-bound
