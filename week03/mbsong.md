@@ -124,25 +124,6 @@ $$
 
 추가로 좋은 자료를 찾았다면 링크만 공유하지 않고, **어떤 질문에 도움이 되는지와 읽을 범위**를 함께 적는다.
 
-<a id="guide-7"></a>
-
-### 7. 애니메이션 설명 영상
-
-> 통합본 작성 시점에 아래 초보자용 영상과 60초 미리보기 MP4는 작업 폴더에 없다. 해당 링크는 원문의 경로를 보존한 것이며, 대본과 제작 안내는 열어 볼 수 있다.
-
-[초보자용 새 영상](./video/week3-beginner.ko.mp4)은 요리사·재료 창고·운반 비유로
-계산과 데이터 이동을 설명한다. 새 대본과 26개 새 장면, 기존 여성 목소리 SunHi로
-제작했으며, 10분·1080p·30fps의 한국어 음성·자막 영상이다.
-[60초 미리보기](./video/week3-beginner-preview.ko.mp4),
-[새 대본](./video/beginner/script.ko.md),
-[제작 안내](./video/beginner/README.md)에서 확인할 수 있다.
-
-[기존 2D 영상](./video/intuition/week3-intuition.ko.mp4)은 별도로 유지한다.
-모든 ZIP 파일과 ElevenLabs 관련 코드·음성·캐시·백업·로그는 요청에 따라 삭제했다.
-ElevenLabs·Blender 버전 영상과 해당 영상 클립도 삭제했다.
-Blender 원본·백업·전용 코드·렌더 캐시·로그도 삭제했다.
-MP4는 `week3/video/`의 로컬 산출물이며 Git에는 포함하지 않는다.
-
 ---
 
 <a id="chapter-1"></a>
