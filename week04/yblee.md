@@ -241,7 +241,7 @@ $$
 
 `BW × I`와 P는 같은 단위이므로 직접 비교할 수 있다.
 
-![같은 작업에서 연산 시간 50 ms와 메모리 시간 100 ms의 큰 값, 연산 상한 20 TFLOPs/s와 메모리 상한 10 TFLOPs/s의 작은 값을 비교한 그림](/home/leeyb/t2s/assets/week04/lecture-visuals/time_to_roofline.png)
+![같은 작업에서 연산 시간 50 ms와 메모리 시간 100 ms의 큰 값, 연산 상한 20 TFLOPs/s와 메모리 상한 10 TFLOPs/s의 작은 값을 비교한 그림](week04/assets/week04/lecture-visuals/time_to_roofline.png)
 
 연산량이 `10¹² FLOPs`, 이동량이 `100 GB`인 가상 작업을 두 방식으로 읽은 그림이다. 왼쪽에서는 더 긴 메모리 시간 100 ms가 기준이고, 오른쪽에서는 더 낮은 메모리 성능 상한 10 TFLOPs/s가 기준이다. 두 막대를 더하지 않고 각 패널의 점선 위치를 고르면 같은 제약을 시간과 처리율로 확인할 수 있다.
 
@@ -279,7 +279,7 @@ $$
 
 ### 5.1 축부터 확인한다
 
-![가상 FP32 하드웨어에서 재사용 조건별 Roofline 성능 상한](/home/leeyb/t2s/assets/week04/roofline.png)
+![가상 FP32 하드웨어에서 재사용 조건별 Roofline 성능 상한](week04/assets/week04/roofline.png)
 
 참고자료의 그림을 그대로 사용했다. 점은 각 구현의 **계산된 성능 상한**이다. 그래프의 `Naive matmul`은 곱셈마다 두 입력을 HBM에서 읽는 가상 기준을 뜻한다.
 
@@ -679,7 +679,7 @@ $$
 
 입력 버퍼와 누산값은 다른 저장 공간에 놓일 수 있으므로 두 열을 더해 곧바로 Shared Memory 요구량이라고 부르지 않는다. 누산값 열은 타일 전체의 양이며 스레드 하나의 레지스터 사용량도 아니다.
 
-![출력 타일을 키울 때 입력 버퍼와 누산값은 커지고 전체 출력 타일 수는 줄어드는 비교 그림](/home/leeyb/t2s/assets/week04/lecture-visuals/tile_storage_parallelism.png)
+![출력 타일을 키울 때 입력 버퍼와 누산값은 커지고 전체 출력 타일 수는 줄어드는 비교 그림](week04/assets/week04/lecture-visuals/tile_storage_parallelism.png)
 
 왼쪽에서 입력 버퍼와 누산값을 따로 보고, 오른쪽에서 전체 출력 타일 수를 확인하자. 이 그림처럼 BM·BN·BK를 함께 두 배로 키우면 두 저장량은 각각 네 배가 되고 출력 타일 수는 4분의 1로 줄어든다. 이 관계만으로 실제 occupancy나 최적 타일을 정할 수는 없다.
 
@@ -962,7 +962,7 @@ $$
 | P만 두 배 | 10 | 40 | 10 | 25 ms | 100 ms | **100 ms** |
 | BW만 두 배 | 10 | 10 | 20 | 50 ms | 50 ms | **50 ms** |
 
-![동일한 로그 축에서 기본 조건, 연산 성능 두 배, HBM 대역폭 두 배의 Roofline과 산술 강도 10인 커널의 성능 상한을 비교한 그림](/home/leeyb/t2s/assets/week04/lecture-visuals/roofline_hardware_changes.png)
+![동일한 로그 축에서 기본 조건, 연산 성능 두 배, HBM 대역폭 두 배의 Roofline과 산술 강도 10인 커널의 성능 상한을 비교한 그림](week04/assets/week04/lecture-visuals/roofline_hardware_changes.png)
 
 세 패널은 같은 축을 사용하며 커널의 가로 위치 I=10도 고정했다. 연산 성능을 높인 가운데 패널에서는 그 위치의 상한이 그대로지만, 대역폭을 높인 오른쪽 패널에서는 상한이 20 TFLOPs/s로 올라간다. 표시한 점은 모두 계산한 상한이다.
 
@@ -1005,7 +1005,7 @@ $$
 | I | 약 15.8760 FLOP/Byte | 약 15.8760 FLOP/Byte |
 | 이상적 시간 | 약 8.657 ms | 약 8.657 ms |
 
-![64×64 출력 타일을 고정한 채 BK를 32에서 64로 늘리면 입력 조각과 버퍼는 커지지만 단계 수가 줄어 누적 읽기량은 같은 그림](/home/leeyb/t2s/assets/week04/lecture-visuals/bk_width_comparison.png)
+![64×64 출력 타일을 고정한 채 BK를 32에서 64로 늘리면 입력 조각과 버퍼는 커지지만 단계 수가 줄어 누적 읽기량은 같은 그림](week04/assets/week04/lecture-visuals/bk_width_comparison.png)
 
 파란 A 조각은 가로로, 노란 B 조각은 세로로 커지지만 초록 누산 타일은 그대로다. 아래 식은 출력 타일 하나의 입력 읽기를 끝까지 합친 값이다. 한 번에 16 KiB씩 128회 읽거나 32 KiB씩 64회 읽거나 모두 2 MiB이므로, 단계당 버퍼와 누적 이동량을 구분해서 볼 수 있다.
 
