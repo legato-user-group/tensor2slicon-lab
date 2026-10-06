@@ -223,8 +223,8 @@ $$
 
 일반 선형 좌표에서 $R=BW\times I$의 기울기는 BW다. **아래와 같은 로그–로그 그래프에서는 이 선의 기울기가 1**이고 BW는 선의 높이를 결정한다. 로그를 취하면 $\log R=\log BW+\log I$이기 때문이다.
 
-![가상 하드웨어의 Roofline. 가로축은 산술 강도, 세로축은 이론적 처리율 상한이며 분기점은 20 FLOPs/Byte다.](<img width="1128" height="668" alt="image" src="https://github.com/user-attachments/assets/6f75d04b-155d-4c5d-a862-247e492da6ea" />
-)
+<img width="1128" height="668" alt="image" src="https://github.com/user-attachments/assets/6f75d04b-155d-4c5d-a862-247e492da6ea" />
+
 
 *그림 1. 직접 계산한 Roofline. 가로축은 FLOPs/Byte, 세로축은 TFLOPs/s이며 두 축은 로그 축이다. 주황색 점은 각 구현 가정의 이론적 상한이고 측정값이 아니다. 32·64 타일은 경사 구간, 128 타일은 수평 구간에 놓인다. 
 
@@ -342,8 +342,8 @@ C[0:2,0:2]
 +A[0:2,2:4]B[2:4,0:2]
 $$
 
-![4×4 행렬에서 2×2 출력 타일을 계산하는 두 K 단계. A와 B의 색칠한 입력 조각은 바뀌지만 C 중간 합은 유지한다.](<img width="1132" height="750" alt="image" src="https://github.com/user-attachments/assets/1a5016d4-197c-4870-889e-a86620b416a5" />
-)
+<img width="1132" height="750" alt="image" src="https://github.com/user-attachments/assets/1a5016d4-197c-4870-889e-a86620b416a5" />
+
 
 *그림 2. 위 행은 k=0,1, 아래 행은 k=2,3에 해당한다. 파란 A 조각과 초록 B 조각은 단계마다 바뀌고 주황 C 중간 합 4개는 유지된다. 마지막 단계가 끝난 뒤에만 C를 쓴다.
 
@@ -353,9 +353,16 @@ $$
 
 $$
 A_{\mathrm{tile}}=
-\begin{bmatrix}A_{00}&A_{01}\\A_{10}&A_{11}\end{bmatrix},\qquad
+\begin{bmatrix}
+A_{00} & A_{01} \\
+A_{10} & A_{11}
+\end{bmatrix},
+\qquad
 B_{\mathrm{tile}}=
-\begin{bmatrix}B_{00}&B_{01}\\B_{10}&B_{11}\end{bmatrix}
+\begin{bmatrix}
+B_{00} & B_{01} \\
+B_{10} & B_{11}
+\end{bmatrix}
 $$
 
 A 4개와 B 4개이므로 **HBM 입력 읽기는 8개**다. 이 값들을 온칩에 보관하고 다음 네 중간 합을 계산한다. 아직 k=2,3의 항을 더하지 않았으므로 완성된 C가 아니라 `acc`로 표시한다.
